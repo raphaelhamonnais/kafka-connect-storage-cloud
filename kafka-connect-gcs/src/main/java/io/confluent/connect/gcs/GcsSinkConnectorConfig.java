@@ -16,6 +16,7 @@
 
 package io.confluent.connect.gcs;
 
+import io.confluent.connect.gcs.storage.CompressionType;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -24,6 +25,8 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,6 +48,7 @@ import io.confluent.connect.storage.partitioner.FieldPartitioner;
 import io.confluent.connect.storage.partitioner.HourlyPartitioner;
 import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
+import org.apache.kafka.common.utils.Utils;
 
 public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
 
@@ -71,6 +75,9 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String GCS_PROXY_PASS_CONFIG = "gcs.proxy.password";
   public static final Password GCS_PROXY_PASS_DEFAULT = new Password(null);
+
+  public static final String COMPRESSION_TYPE_CONFIG = "gcs.compression.type";
+  public static final String COMPRESSION_TYPE_DEFAULT = "none";
 
   private final String name;
 
@@ -232,6 +239,22 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
           Width.LONG,
           "GCS Proxy Password"
       );
+
+      configDef.define(
+          COMPRESSION_TYPE_CONFIG,
+          Type.STRING,
+          COMPRESSION_TYPE_DEFAULT,
+          new CompressionTypeValidator(),
+          Importance.LOW,
+          "Compression type for file written to GCS. "
+          + "Applied when using JsonFormat or ByteArrayFormat. "
+          + "Available values: none, gzip.",
+          group,
+          ++orderInGroup,
+          Width.LONG,
+          "Compression type"
+      );
+
     }
     return configDef;
   }
@@ -289,6 +312,10 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
       return originalsStrings().get(FORMAT_BYTEARRAY_LINE_SEPARATOR_CONFIG);
     }
     return FORMAT_BYTEARRAY_LINE_SEPARATOR_DEFAULT;
+  }
+
+  public CompressionType getCompressionType() {
+    return CompressionType.forName(getString(COMPRESSION_TYPE_CONFIG));
   }
 
   protected static String parseName(Map<String, String> props) {
@@ -370,6 +397,33 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
         container.define(key);
       }
     }
+  }
+  private static class CompressionTypeValidator implements ConfigDef.Validator {
+    public static final Map<String, CompressionType> TYPES_BY_NAME = new HashMap<>();
+
+    public static final String ALLOWED_VALUES;
+
+    static {
+      List<String> names = new ArrayList<>();
+      for (CompressionType compressionType : CompressionType.values()) {
+        TYPES_BY_NAME.put(compressionType.name, compressionType);
+        names.add(compressionType.name);
+      }
+      ALLOWED_VALUES = Utils.join(names, ", ");
+    }
+
+    @Override
+    public void ensureValid(String name, Object compressionType) {
+      String compressionTypeString = ((String) compressionType).trim();
+      if (!TYPES_BY_NAME.containsKey(compressionTypeString)) {
+        throw new ConfigException(name, compressionType, "Value must be one of: " + ALLOWED_VALUES);
+      }
+    }
+    @Override
+    public String toString() {
+      return "[" + ALLOWED_VALUES + "]";
+    }
+
   }
 
   public static void main(String[] args) {

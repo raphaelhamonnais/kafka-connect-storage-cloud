@@ -26,6 +26,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 import io.confluent.connect.gcs.GcsSinkConnectorConfig;
 import io.confluent.connect.gcs.storage.GcsOutputStream;
@@ -38,7 +40,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<GcsSinkCon
   private static final Logger log = LoggerFactory.getLogger(JsonRecordWriterProvider.class);
   private static final String EXTENSION = ".json";
   private static final String LINE_SEPARATOR = System.lineSeparator();
-  private static final byte[] LINE_SEPARATOR_BYTES = LINE_SEPARATOR.getBytes();
+  private static final byte[] LINE_SEPARATOR_BYTES = LINE_SEPARATOR.getBytes(StandardCharsets.UTF_8);
   private final GcsStorage storage;
   private final ObjectMapper mapper;
   private final JsonConverter converter;
@@ -51,7 +53,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<GcsSinkCon
 
   @Override
   public String getExtension() {
-    return EXTENSION;
+    return EXTENSION + storage.conf().getCompressionType().extension;
   }
 
   @Override
@@ -59,9 +61,10 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<GcsSinkCon
     try {
       return new RecordWriter() {
         final GcsOutputStream gcsOS = storage.create(filename, true);
+        final OutputStream gcsOutWrapper = gcsOS.wrapForCompression();
         final JsonGenerator writer = mapper.getFactory()
-                                         .createGenerator(gcsOS)
-                                         .setRootValueSeparator(null);
+                                           .createGenerator(gcsOutWrapper)
+                                           .setRootValueSeparator(null);
 
         @Override
         public void write(SinkRecord record) {
@@ -74,8 +77,8 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<GcsSinkCon
                   record.valueSchema(),
                   value
               );
-              gcsOS.write(rawJson);
-              gcsOS.write(LINE_SEPARATOR_BYTES);
+              gcsOutWrapper.write(rawJson);
+              gcsOutWrapper.write(LINE_SEPARATOR_BYTES);
             } else {
               writer.writeObject(value);
               writer.writeRaw(LINE_SEPARATOR);
@@ -92,7 +95,7 @@ public class JsonRecordWriterProvider implements RecordWriterProvider<GcsSinkCon
             // output stream before committing any data to GCS.
             writer.flush();
             gcsOS.commit();
-            writer.close();
+            gcsOutWrapper.close();
           } catch (IOException e) {
             throw new ConnectException(e);
           }

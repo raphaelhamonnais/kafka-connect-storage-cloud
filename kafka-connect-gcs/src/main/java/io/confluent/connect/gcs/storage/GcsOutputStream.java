@@ -46,6 +46,8 @@ public class GcsOutputStream extends OutputStream {
   private ByteBuffer buffer;
   private MultipartUpload multiPartUpload;
   private final int retries;
+  private final CompressionType compressionType;
+  private volatile OutputStream compressionFilter;
 
   public GcsOutputStream(String key, GcsSinkConnectorConfig conf, Storage gcs) {
     this.gcs = gcs;
@@ -56,6 +58,7 @@ public class GcsOutputStream extends OutputStream {
     this.retries = conf.getGcsPartRetries();
     this.buffer = ByteBuffer.allocate(this.partSize);
     this.multiPartUpload = null;
+    this.compressionType = conf.getCompressionType();
     log.debug("Create GcsOutputStream for bucket '{}' key '{}'", bucket, key);
   }
 
@@ -120,6 +123,7 @@ public class GcsOutputStream extends OutputStream {
     }
 
     try {
+      compressionType.finalize(compressionFilter);
       if (buffer.hasRemaining()) {
         uploadPart();
       }
@@ -193,4 +197,12 @@ public class GcsOutputStream extends OutputStream {
       // TBD
     }
   }
+
+    public OutputStream wrapForCompression() {
+      if (compressionFilter == null) {
+          // Initialize compressionFilter the first time this method is called.
+          compressionFilter = compressionType.wrapForOutput(this);
+      }
+      return compressionFilter;
+    }
 }

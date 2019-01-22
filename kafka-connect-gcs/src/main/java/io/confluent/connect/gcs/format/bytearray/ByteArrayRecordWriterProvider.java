@@ -30,6 +30,8 @@ import io.confluent.connect.gcs.storage.GcsOutputStream;
 import io.confluent.connect.gcs.storage.GcsStorage;
 import io.confluent.connect.storage.format.RecordWriter;
 import io.confluent.connect.storage.format.RecordWriterProvider;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class ByteArrayRecordWriterProvider implements RecordWriterProvider<GcsSinkConnectorConfig> {
 
@@ -43,18 +45,21 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<GcsSi
     this.storage = storage;
     this.converter = converter;
     this.extension = storage.conf().getByteArrayExtension();
-    this.lineSeparatorBytes = storage.conf().getFormatByteArrayLineSeparator().getBytes();
+    this.lineSeparatorBytes = storage.conf()
+                                     .getFormatByteArrayLineSeparator()
+                                     .getBytes(StandardCharsets.UTF_8);
   }
 
   @Override
   public String getExtension() {
-    return extension;
+    return extension + storage.conf().getCompressionType().extension;
   }
 
   @Override
   public RecordWriter getRecordWriter(final GcsSinkConnectorConfig conf, final String filename) {
     return new RecordWriter() {
       final GcsOutputStream gcsOS = storage.create(filename, true);
+      final OutputStream gcsOutWrapper = gcsOS.wrapForCompression();
 
       @Override
       public void write(SinkRecord record) {
@@ -62,8 +67,8 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<GcsSi
         try {
           byte[] bytes = converter.fromConnectData(
               record.topic(), record.valueSchema(), record.value());
-          gcsOS.write(bytes);
-          gcsOS.write(lineSeparatorBytes);
+          gcsOutWrapper.write(bytes);
+          gcsOutWrapper.write(lineSeparatorBytes);
         } catch (IOException | DataException e) {
           throw new ConnectException(e);
         }
@@ -73,6 +78,7 @@ public class ByteArrayRecordWriterProvider implements RecordWriterProvider<GcsSi
       public void commit() {
         try {
           gcsOS.commit();
+          gcsOutWrapper.close();
         } catch (IOException e) {
           throw new ConnectException(e);
         }
