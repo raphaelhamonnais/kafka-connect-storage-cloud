@@ -30,9 +30,7 @@ public class AvroFormat implements Format<GcsSinkConnectorConfig, String> {
 
   public AvroFormat(GcsStorage storage) {
     this.storage = storage;
-    this.avroData = new AvroData(
-        storage.conf().getInt(GcsSinkConnectorConfig.SCHEMA_CACHE_SIZE_CONFIG)
-    );
+    this.avroData = new AvroData(storage.conf().avroDataConfig());
   }
 
   @Override
