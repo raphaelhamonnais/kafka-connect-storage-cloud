@@ -195,6 +195,7 @@ public class GcsOutputStream extends OutputStream {
     public void abort() {
       log.warn("Aborting multi-part upload with id '{}'", uploadId);
       // TBD
+      // FIXME code abort method
     }
   }
 

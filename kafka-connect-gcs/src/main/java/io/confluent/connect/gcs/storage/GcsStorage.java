@@ -52,7 +52,7 @@ public class GcsStorage
   }
 
   public Storage newGcsClient(GcsSinkConnectorConfig config) {
-    //TODO: customize for retries and other options here.
+    // FIXME: customize for retries and other options here (region, credentials, retries, proxy, ...).
     return StorageOptions.getDefaultInstance().getService();
   }
 
