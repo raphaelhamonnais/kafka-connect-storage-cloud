@@ -13,7 +13,7 @@
 
     <suppress
             checks="MethodLength"
-            files="(S3SinkConnectorConfig).java"
+            files="(S3SinkConnectorConfig|GcsSinkConnectorConfig).java"
     />
 
 </suppressions>

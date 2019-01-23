@@ -398,6 +398,7 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
       }
     }
   }
+
   private static class CompressionTypeValidator implements ConfigDef.Validator {
     public static final Map<String, CompressionType> TYPES_BY_NAME = new HashMap<>();
 
@@ -419,6 +420,7 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
         throw new ConfigException(name, compressionType, "Value must be one of: " + ALLOWED_VALUES);
       }
     }
+
     @Override
     public String toString() {
       return "[" + ALLOWED_VALUES + "]";

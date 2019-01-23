@@ -199,11 +199,11 @@ public class GcsOutputStream extends OutputStream {
     }
   }
 
-    public OutputStream wrapForCompression() {
-      if (compressionFilter == null) {
-          // Initialize compressionFilter the first time this method is called.
-          compressionFilter = compressionType.wrapForOutput(this);
-      }
-      return compressionFilter;
+  public OutputStream wrapForCompression() {
+    if (compressionFilter == null) {
+      // Initialize compressionFilter the first time this method is called.
+      compressionFilter = compressionType.wrapForOutput(this);
     }
+    return compressionFilter;
+  }
 }
