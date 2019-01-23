@@ -16,6 +16,7 @@
 
 package io.confluent.connect.gcs;
 
+import com.google.cloud.storage.StorageException;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -115,6 +116,8 @@ public class GcsSinkTask extends SinkTask {
     } catch (ClassNotFoundException | IllegalAccessException | InstantiationException
         | InvocationTargetException | NoSuchMethodException e) {
       throw new ConnectException("Reflection exception: ", e);
+    } catch (StorageException e) {
+      throw new ConnectException("Cloud Storage exception: ", e);
     }
   }
 
@@ -129,7 +132,6 @@ public class GcsSinkTask extends SinkTask {
     // a call to "close".
     assignment.addAll(partitions);
     for (TopicPartition tp : assignment) {
-      /*
       TopicPartitionWriter writer = new TopicPartitionWriter(
           tp,
           writerProvider,
@@ -139,7 +141,6 @@ public class GcsSinkTask extends SinkTask {
           time
       );
       topicPartitionWriters.put(tp, writer);
-      */
     }
   }
 
