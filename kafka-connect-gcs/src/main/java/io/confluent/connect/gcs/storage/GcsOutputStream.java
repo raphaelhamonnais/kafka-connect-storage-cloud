@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -49,6 +50,17 @@ public class GcsOutputStream extends OutputStream {
   private final CompressionType compressionType;
   private volatile OutputStream compressionFilter;
 
+  /*
+  FIXME
+  Temporary using a ByteArrayOutputStream "infinite" buffer instead of a
+  limited sized ByteBuffer because the logic isn't quite right and it's
+  losing data along the way.
+  The ByteArrayOutputStream buffer will eventually throw OutOfMemory errors if
+  the buffered data is too big.
+   */
+  private ByteArrayOutputStream infiniteBuffer; // Temporary hack until
+  private boolean useInfiniteBuffer = true;
+
   public GcsOutputStream(String key, GcsSinkConnectorConfig conf, Storage gcs) {
     this.gcs = gcs;
     this.bucket = conf.getBucketName();
@@ -57,6 +69,7 @@ public class GcsOutputStream extends OutputStream {
     this.closed = false;
     this.retries = conf.getGcsPartRetries();
     this.buffer = ByteBuffer.allocate(this.partSize);
+    this.infiniteBuffer = new ByteArrayOutputStream();
     this.multiPartUpload = null;
     this.compressionType = conf.getCompressionType();
     log.debug("Create GcsOutputStream for bucket '{}' key '{}'", bucket, key);
@@ -64,6 +77,11 @@ public class GcsOutputStream extends OutputStream {
 
   @Override
   public void write(int b) throws IOException {
+    if (useInfiniteBuffer) {
+      infiniteBuffer.write(b);
+      return;
+    }
+
     buffer.put((byte) b);
     if (!buffer.hasRemaining()) {
       uploadPart();
@@ -77,6 +95,11 @@ public class GcsOutputStream extends OutputStream {
     } else if (outOfRange(off, b.length) || len < 0 || outOfRange(off + len, b.length)) {
       throw new IndexOutOfBoundsException();
     } else if (len == 0) {
+      return;
+    }
+
+    if (useInfiniteBuffer) {
+      infiniteBuffer.write(b);
       return;
     }
 
@@ -125,7 +148,15 @@ public class GcsOutputStream extends OutputStream {
     try {
       compressionType.finalize(compressionFilter);
       if (buffer.hasRemaining()) {
-        uploadPart();
+        log.info("In commit() method, buffer has remaining data, uploading it.");
+        if (! useInfiniteBuffer) uploadPart();
+      }
+      // Adding this check to make the ByteArrayOutputStream buffer work
+      // because the multiPartUpload class was previously initialized when calling
+      // the uploadPart() method, which is never called with the ByteArrayOutputStream buffer.
+      if (multiPartUpload == null) {
+        log.debug("New multi-part upload for bucket '{}' key '{}'", bucket, key);
+        multiPartUpload = newMultipartUpload();
       }
       multiPartUpload.complete();
       log.debug("Upload complete for bucket '{}' key '{}'", bucket, key);
@@ -186,6 +217,18 @@ public class GcsOutputStream extends OutputStream {
 
     public void complete() {
       log.debug("Completing multi-part upload for key '{}', id '{}'", key, uploadId);
+
+      if (useInfiniteBuffer) {
+        gcs.create(BlobInfo.newBuilder(bucket, key).build(), infiniteBuffer.toByteArray());
+        try {
+          infiniteBuffer.close();
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        log.info("returning because useInfiniteBuffer");
+        return;
+      }
+
       // Use BlobInfo for target objects from the beginning to be able to set target options such
       // as crc32 and other in the future.
       BlobInfo composeReq = BlobInfo.newBuilder(bucket, key).build();
