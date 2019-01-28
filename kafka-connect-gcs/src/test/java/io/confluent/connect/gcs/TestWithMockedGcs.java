@@ -40,6 +40,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.Assert.assertNotNull;
+
 public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
 
   protected static final String PATH_TO_GOOGLE_CREDENTIALS = "/Users/raphael.hamonnais/Downloads/datadog-sandbox-68abd4e4d7cf.json";
@@ -67,28 +69,29 @@ public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
   @BeforeClass
   public static void setUpBeforeClass() throws Exception {
     if (isRealClient()) {
-      System.out.println("Using a real GCS client: creating bucket if need be");
+      log.info("Using a real GCS client: creating bucket if need be");
       if (gcsClient.get(GCS_TEST_BUCKET_NAME) != null) {
-        System.out.println("Bucket $bucket already exists, removing all files and versions before tests");
+        log.info("Bucket {} already exists, removing all files and versions before tests", GCS_TEST_BUCKET_NAME);
         gcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
                  .iterateAll().forEach(b -> b.delete());
       } else {
-        System.out.println("Creating bucket $bucket for unit tests");
+        log.info("Creating bucket {} for unit tests", GCS_TEST_BUCKET_NAME);
         gcsClient.create(BucketInfo.newBuilder(GCS_TEST_BUCKET_NAME).setVersioningEnabled(true).build());
       }
+      assertNotNull(gcsClient.get(GCS_TEST_BUCKET_NAME));
     }
     else {
-      System.out.println("Not using a real GCS client, no need to create a bucket");
+      log.info("Not using a real GCS client, no need to create a bucket");
     }
   }
 
   @AfterClass
   public static void tearDownAfterClass() throws Exception {
     if (isRealClient()) {
-      System.out.println("Cleaning up GCS resources in " + GCS_TEST_BUCKET_NAME);
+      log.info("Cleaning up GCS resources in {}", GCS_TEST_BUCKET_NAME);
       gcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
                .iterateAll().forEach(b -> b.delete());
-      System.out.println("Deleting the bucket " + GCS_TEST_BUCKET_NAME);
+      log.info("Deleting the bucket {}", GCS_TEST_BUCKET_NAME);
       gcsClient.get(GCS_TEST_BUCKET_NAME).delete();
     }
   }
