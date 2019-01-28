@@ -85,17 +85,6 @@ public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
     }
   }
 
-  @AfterClass
-  public static void tearDownAfterClass() throws Exception {
-    if (isRealClient()) {
-      log.info("Cleaning up GCS resources in {}", GCS_TEST_BUCKET_NAME);
-      gcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
-               .iterateAll().forEach(b -> b.delete());
-      log.info("Deleting the bucket {}", GCS_TEST_BUCKET_NAME);
-      gcsClient.get(GCS_TEST_BUCKET_NAME).delete();
-    }
-  }
-
   //@Before
   @Override
   public void setUp() throws Exception {
@@ -116,6 +105,17 @@ public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
     super.tearDown();
 //    deleteAllVersions("");
 //    gcsMock.stop();
+  }
+
+  @AfterClass
+  public static void tearDownAfterClass() throws Exception {
+    if (isRealClient()) {
+      log.info("Cleaning up GCS resources in {}", GCS_TEST_BUCKET_NAME);
+      gcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
+               .iterateAll().forEach(b -> b.delete());
+      log.info("Deleting the bucket {}", GCS_TEST_BUCKET_NAME);
+      gcsClient.get(GCS_TEST_BUCKET_NAME).delete();
+    }
   }
 
 
@@ -161,20 +161,21 @@ public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
 
   public static Collection<Object> readRecordsAvro(String bucketName, String fileKey, Storage gcs) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      return AvroUtils.getRecords(inputStream(gcs, bucketName, fileKey));
+    InputStream in = inputStream(gcs, bucketName, fileKey);
+    return AvroUtils.getRecords(in);
   }
 
   public static Collection<Object> readRecordsJson(String bucketName, String fileKey, Storage gcs,
                                                    CompressionType compressionType) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
-      return JsonUtils.getRecords(inputStream(gcs, bucketName, fileKey));
+    InputStream in = inputStream(gcs, bucketName, fileKey);
+    return JsonUtils.getRecords(compressionType.wrapForInput(in));
   }
 
   public static Collection<Object> readRecordsByteArray(String bucketName, String fileKey, Storage gcs,
                                                         CompressionType compressionType, byte[] lineSeparatorBytes) throws IOException {
       log.debug("Reading records from bucket '{}' key '{}': ", bucketName, fileKey);
       InputStream in = inputStream(gcs, bucketName, fileKey);
-
       return ByteArrayUtils.getRecords(compressionType.wrapForInput(in), lineSeparatorBytes);
   }
 
