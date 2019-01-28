@@ -19,6 +19,7 @@ package io.confluent.connect.gcs.storage;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
+import io.confluent.connect.gcs.GcsSinkConnectorConfig;
 import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,9 +29,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-
-import io.confluent.connect.gcs.GcsSinkConnectorConfig;
 
 /**
  * Output stream enabling multi-part uploads of Kafka records.
@@ -99,7 +99,7 @@ public class GcsOutputStream extends OutputStream {
     }
 
     if (useInfiniteBuffer) {
-      infiniteBuffer.write(b);
+      infiniteBuffer.write(Arrays.copyOfRange(b, off, off + len));
       return;
     }
 
@@ -147,9 +147,9 @@ public class GcsOutputStream extends OutputStream {
 
     try {
       compressionType.finalize(compressionFilter);
-      if (buffer.hasRemaining()) {
+      if (!useInfiniteBuffer && buffer.hasRemaining()) {
         log.info("In commit() method, buffer has remaining data, uploading it.");
-        if (! useInfiniteBuffer) uploadPart();
+        uploadPart();
       }
       // Adding this check to make the ByteArrayOutputStream buffer work
       // because the multiPartUpload class was previously initialized when calling
@@ -225,7 +225,6 @@ public class GcsOutputStream extends OutputStream {
         } catch (IOException e) {
           e.printStackTrace();
         }
-        log.info("returning because useInfiniteBuffer");
         return;
       }
 
