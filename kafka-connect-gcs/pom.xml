@@ -36,7 +36,7 @@
     </description>
 
     <properties>
-        <gcs.version>1.12.0</gcs.version>
+        <gcs.version>1.60.0</gcs.version>
     </properties>
 
     <repositories>
@@ -51,6 +51,12 @@
             <groupId>com.google.cloud</groupId>
             <artifactId>google-cloud-storage</artifactId>
             <version>${gcs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.cloud</groupId>
+            <artifactId>google-cloud-nio</artifactId>
+            <version>0.78.0-alpha</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
