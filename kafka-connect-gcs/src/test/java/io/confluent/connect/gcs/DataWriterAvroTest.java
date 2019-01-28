@@ -63,7 +63,7 @@ public class DataWriterAvroTest extends TestWithMockedGcs {
 
   private final String extension = ".avro";
   protected GcsStorage storage;
-  private Storage gcs;
+  protected Storage gcs;
   AvroFormat format;
   Partitioner<FieldSchema> partitioner;
   GcsSinkTask task;
@@ -186,7 +186,7 @@ public class DataWriterAvroTest extends TestWithMockedGcs {
     List<SinkRecord> sinkRecords = createRecords(2);
     byte[] partialData = AvroUtils.putRecords(sinkRecords, format.getAvroData());
     String fileKey = FileUtils.fileKeyToCommit(topicsDir, getDirectory(), TOPIC_PARTITION, 0, extension, ZERO_PAD_FMT);
-    gcs.create(BlobInfo.newBuilder(BlobId.of(GCS_TEST_BUCKET_NAME, fileKey)).build());
+    gcs.create(BlobInfo.newBuilder(BlobId.of(GCS_TEST_BUCKET_NAME, fileKey)).build(), partialData);
 
     // Accumulate rest of the records.
     sinkRecords.addAll(createRecords(5, 2));
