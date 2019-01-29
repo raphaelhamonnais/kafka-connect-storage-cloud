@@ -80,11 +80,6 @@ public class DataWriterByteArrayTest extends TestWithMockedGcs {
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
-    log.info("Cleaning up GCS resources in {}", GCS_TEST_BUCKET_NAME);
-    // Removing all files in the bucket because the unit tests expect to have only a given
-    // set of files in the bucket per test and will fail if there are other files present.
-    gcsClient.list(GCS_TEST_BUCKET_NAME, Storage.BlobListOption.prefix(""), Storage.BlobListOption.versions(true))
-             .iterateAll().forEach(b -> b.delete());
     localProps.clear();
   }
 

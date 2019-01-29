@@ -14,7 +14,6 @@
 
 package io.confluent.connect.gcs;
 
-import com.google.cloud.storage.Storage;
 import io.confluent.common.utils.SystemTime;
 import io.confluent.common.utils.Time;
 import io.confluent.connect.gcs.format.avro.AvroFormat;
@@ -93,10 +92,6 @@ public class GcsSinkConnectorTestBase extends StorageSinkTestBase {
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
-  }
-
-  public Storage newGcsClient(GcsSinkConnectorConfig config) {
-    return null;
   }
 }
 

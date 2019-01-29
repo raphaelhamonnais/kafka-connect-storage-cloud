@@ -15,6 +15,7 @@
 package io.confluent.connect.gcs;
 
 import com.google.api.gax.paging.Page;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.storage.*;
 import com.google.cloud.storage.Storage.BlobListOption;
 import com.google.cloud.storage.contrib.nio.testing.LocalStorageHelper;
@@ -23,6 +24,7 @@ import io.confluent.connect.gcs.format.avro.AvroUtils;
 import io.confluent.connect.gcs.format.bytearray.ByteArrayUtils;
 import io.confluent.connect.gcs.format.json.JsonUtils;
 import io.confluent.connect.gcs.storage.CompressionType;
+import io.confluent.connect.gcs.storage.GcsStorage;
 import io.confluent.connect.gcs.util.FileUtils;
 import io.confluent.connect.storage.common.StorageCommonConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -45,11 +47,10 @@ import static org.junit.Assert.assertNotNull;
 public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
 
   protected static final String PATH_TO_GOOGLE_CREDENTIALS = "/Users/raphael.hamonnais/Downloads/datadog-sandbox-68abd4e4d7cf.json";
+  public static final String PROJECT_ID = "datadog-sandbox";
   protected static final Logger log = LoggerFactory.getLogger(TestWithMockedGcs.class);
 
-  protected static Storage gcsClient = new TestWithMockedGcs().newGcsClient(connectorConfig);
-//  protected GcsMock gcsMock; // TODO is this needed to do GCS unit tests?
-  protected String port;
+  protected static Storage staticGcsClient = getStaticGcsClient();
 
   @Rule
   public TemporaryFolder gcsMockRoot = new TemporaryFolder();
@@ -70,15 +71,15 @@ public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
   public static void setUpBeforeClass() throws Exception {
     if (isRealClient()) {
       log.info("Using a real GCS client: creating bucket if need be");
-      if (gcsClient.get(GCS_TEST_BUCKET_NAME) != null) {
+      if (staticGcsClient.get(GCS_TEST_BUCKET_NAME) != null) {
         log.info("Bucket {} already exists, removing all files and versions before tests", GCS_TEST_BUCKET_NAME);
-        gcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
-                 .iterateAll().forEach(b -> b.delete());
+        staticGcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
+                       .iterateAll().forEach(b -> b.delete());
       } else {
         log.info("Creating bucket {} for unit tests", GCS_TEST_BUCKET_NAME);
-        gcsClient.create(BucketInfo.newBuilder(GCS_TEST_BUCKET_NAME).setVersioningEnabled(true).build());
+        staticGcsClient.create(BucketInfo.newBuilder(GCS_TEST_BUCKET_NAME).setVersioningEnabled(true).build());
       }
-      assertNotNull(gcsClient.get(GCS_TEST_BUCKET_NAME));
+      assertNotNull(staticGcsClient.get(GCS_TEST_BUCKET_NAME));
     }
     else {
       log.info("Not using a real GCS client, no need to create a bucket");
@@ -89,32 +90,29 @@ public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-//    String dirName = "gcs-tests-" + UUID.randomUUID().toString();
-//    File gcsMockDir = gcsMockRoot.newFolder(dirName);
-//    System.out.println("Create folder: " + gcsMockDir.getCanonicalPath());
-//    BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(bucket, dirName)).build();
-//    gcs.create(blobInfo);
-//    port = url.substring(url.lastIndexOf(":") + 1);
-//    gcsMock = GCSMock.create(Integer.parseInt(port), gcsMockDir.getCanonicalPath());
-//    gcsMock.start();
   }
 
   @After
   @Override
   public void tearDown() throws Exception {
     super.tearDown();
-//    deleteAllVersions("");
-//    gcsMock.stop();
+    if (isRealClient()) {
+      log.info("Cleaning up GCS resources in {}", GCS_TEST_BUCKET_NAME);
+      // Removing all files in the bucket because the unit tests expect to have only a given
+      // set of files in the bucket per test and will fail if there are other files present.
+      staticGcsClient.list(GCS_TEST_BUCKET_NAME, Storage.BlobListOption.prefix(""), Storage.BlobListOption.versions(true))
+                     .iterateAll().forEach(b -> b.delete());
+    }
   }
 
   @AfterClass
   public static void tearDownAfterClass() throws Exception {
     if (isRealClient()) {
       log.info("Cleaning up GCS resources in {}", GCS_TEST_BUCKET_NAME);
-      gcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
-               .iterateAll().forEach(b -> b.delete());
+      staticGcsClient.list(GCS_TEST_BUCKET_NAME, BlobListOption.prefix(""), BlobListOption.versions(true))
+                     .iterateAll().forEach(b -> b.delete());
       log.info("Deleting the bucket {}", GCS_TEST_BUCKET_NAME);
-      gcsClient.get(GCS_TEST_BUCKET_NAME).delete();
+      staticGcsClient.get(GCS_TEST_BUCKET_NAME).delete();
     }
   }
 
@@ -189,23 +187,36 @@ public class TestWithMockedGcs extends GcsSinkConnectorTestBase {
     return gcsClient.get(BlobId.of(bucket, key));
   }
 
-  @Override
   public Storage newGcsClient(GcsSinkConnectorConfig config) {
-    String projectId = "datadog-sandbox";
     Storage realGCSClient = null;
 
     // Try instantiating a real GCS Client if proper credential and project id are specified
     try {
-      realGCSClient = RemoteStorageHelper
-          .create(projectId, new FileInputStream(PATH_TO_GOOGLE_CREDENTIALS))
-          .getOptions()
-          .getService();
-    } catch (FileNotFoundException ignored) {}
+      realGCSClient = StorageOptions.newBuilder()
+                                    .setProjectId(PROJECT_ID)
+                                    .setCredentials(GoogleCredentials.fromStream(new FileInputStream(PATH_TO_GOOGLE_CREDENTIALS)))
+                                    .setRetrySettings(GcsStorage.retrySettings(config))
+                                    .build()
+                                    .getService();
+    } catch (IOException ignored) {}
 
     // Return a mocked Storage Helper if the real GCS Client couldn't be instantiated
     if (realGCSClient == null)
       return LocalStorageHelper.getOptions().getService();
 
+    return realGCSClient;
+  }
+
+  private static Storage getStaticGcsClient() {
+    // Try instantiating a real GCS Client if proper credential and project id are specified
+    // and return null if not.
+    Storage realGCSClient = null;
+    try {
+      realGCSClient = RemoteStorageHelper
+          .create(PROJECT_ID, new FileInputStream(PATH_TO_GOOGLE_CREDENTIALS))
+          .getOptions()
+          .getService();
+    } catch (IOException ignored) {}
     return realGCSClient;
   }
 
