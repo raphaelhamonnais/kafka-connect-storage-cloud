@@ -17,6 +17,7 @@
 package io.confluent.connect.gcs.storage;
 
 import com.google.api.gax.paging.Page;
+import com.google.api.gax.retrying.RetrySettings;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
@@ -26,6 +27,11 @@ import java.io.OutputStream;
 
 import io.confluent.connect.gcs.GcsSinkConnectorConfig;
 import io.confluent.connect.storage.common.util.StringUtils;
+import org.threeten.bp.Duration;
+
+import static io.confluent.connect.gcs.GcsSinkConnectorConfig.GCS_PART_RETRIES_CONFIG;
+import static io.confluent.connect.gcs.GcsSinkConnectorConfig.GCS_RETRY_BACKOFF_CONFIG;
+import static io.confluent.connect.gcs.GcsSinkConnectorConfig.GCS_RETRY_MAX_BACKOFF_TIME_MS;
 
 /**
  * GCS implementation of the storage interface for Connect sinks.
@@ -39,9 +45,9 @@ public class GcsStorage
   private final GcsSinkConnectorConfig conf;
 
   /**
-   * Construct an Gcs storage class given a configuration and an AWS Gcs address.
+   * Construct an Gcs storage class given a configuration and an GCS address.
    *
-   * @param conf the Gcs configuration.
+   * @param conf the GCS configuration.
    * @param url the Gcs address.
    */
   public GcsStorage(GcsSinkConnectorConfig conf, String url) {
@@ -51,10 +57,36 @@ public class GcsStorage
     this.gcs = newGcsClient(conf);
   }
 
+  /**
+   * Construct a new GCS client given a configuration.
+   *
+   * @param config the GCS configuration.
+   *
+   * Notes about features to implement if needed:
+   *  - TODO Credentials (if needed)
+   *  - TODO Proxy (if needed)
+   *  - TODO Region (if needed)
+   *    - According to https://cloud.google.com/storage/docs/locations, the region (or location)
+   *      can only be specified when creating a bucket and not at the GCS client level.
+   */
   public Storage newGcsClient(GcsSinkConnectorConfig config) {
-    // FIXME: customize for retries and other options here (region, credentials,
-    // retries, proxy, ...).
-    return StorageOptions.getDefaultInstance().getService();
+    return StorageOptions.newBuilder()
+                         .setRetrySettings(retrySettings(config))
+                         .build()
+                         .getService();
+  }
+
+  public static RetrySettings retrySettings(GcsSinkConnectorConfig config) {
+    return RetrySettings.newBuilder()
+                        .setMaxAttempts(config.getInt(GCS_PART_RETRIES_CONFIG))
+                        .setInitialRetryDelay(Duration.ofMillis(config.getLong(GCS_RETRY_BACKOFF_CONFIG)))
+                        .setMaxRetryDelay(Duration.ofMillis(GCS_RETRY_MAX_BACKOFF_TIME_MS))
+                        .setTotalTimeout(Duration.ofMillis(120000L))
+                        .setRetryDelayMultiplier(1.5)
+                        .setInitialRpcTimeout(Duration.ofMillis(120000L))
+                        .setRpcTimeoutMultiplier(1.5)
+                        .setMaxRpcTimeout(Duration.ofMillis(120000L))
+                        .build();
   }
 
   // Visible for testing.

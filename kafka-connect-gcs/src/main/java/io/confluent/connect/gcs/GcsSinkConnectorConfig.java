@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import io.confluent.connect.gcs.format.avro.AvroFormat;
 import io.confluent.connect.gcs.format.json.JsonFormat;
@@ -50,6 +51,8 @@ import io.confluent.connect.storage.partitioner.PartitionerConfig;
 import io.confluent.connect.storage.partitioner.TimeBasedPartitioner;
 import org.apache.kafka.common.utils.Utils;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+
 public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
 
   // GCS Group
@@ -60,6 +63,11 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
 
   public static final String GCS_PART_RETRIES_CONFIG = "gcs.part.retries";
   public static final int GCS_PART_RETRIES_DEFAULT = 3;
+
+  public static final String GCS_RETRY_BACKOFF_CONFIG = "gcs.retry.backoff.ms";
+  public static final int GCS_RETRY_BACKOFF_DEFAULT = 200;
+
+  public static final long GCS_RETRY_MAX_BACKOFF_TIME_MS = TimeUnit.HOURS.toMillis(24);
 
   public static final String FORMAT_BYTEARRAY_EXTENSION_CONFIG = "format.bytearray.extension";
   public static final String FORMAT_BYTEARRAY_EXTENSION_DEFAULT = ".bin";
@@ -151,12 +159,33 @@ public class GcsSinkConnectorConfig extends StorageSinkConnectorConfig {
           GCS_PART_RETRIES_CONFIG,
           Type.INT,
           GCS_PART_RETRIES_DEFAULT,
+          atLeast(0),
           Importance.MEDIUM,
-          "Number of upload retries of a single GCS part. Zero means no retries.",
+          "Maximum number of retry attempts for failed requests. Zero means no retries. "
+          + "The actual number of attempts is determined by the CGCS client based on multiple "
+          + "factors, including, but not limited to - "
+          + "the value of this parameter, type of exception occurred, "
+          + "throttling settings of the underlying GCS client, etc.",
           group,
           ++orderInGroup,
           Width.LONG,
           "GCS Part Upload Retries"
+      );
+
+      configDef.define(
+          GCS_RETRY_BACKOFF_CONFIG,
+          Type.LONG,
+          GCS_RETRY_BACKOFF_DEFAULT,
+          atLeast(0L),
+          Importance.LOW,
+          "How long to wait in milliseconds before attempting the first retry "
+          + "of a failed GCS request. Upon a failure, this connector may wait up to twice as "
+          + "long as the previous wait, up to the maximum number of retries. "
+          + "This avoids retrying in a tight loop under failure scenarios.",
+          group,
+          ++orderInGroup,
+          Width.SHORT,
+          "Retry Backoff (ms)"
       );
 
       configDef.define(
