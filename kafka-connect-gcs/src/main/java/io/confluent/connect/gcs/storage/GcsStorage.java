@@ -61,15 +61,16 @@ public class GcsStorage
    * Construct a new GCS client given a configuration.
    *
    * @param config the GCS configuration.
-   *
-   * Notes about features to implement if needed:
-   *  - TODO Credentials (if needed)
-   *  - TODO Proxy (if needed)
-   *  - TODO Region (if needed)
-   *    - According to https://cloud.google.com/storage/docs/locations, the region (or location)
-   *      can only be specified when creating a bucket and not at the GCS client level.
    */
   public Storage newGcsClient(GcsSinkConnectorConfig config) {
+    /*
+     * Notes about features to implement if needed:
+     *  - TODO Credentials (if needed)
+     *  - TODO Proxy (if needed)
+     *  - TODO Region (if needed)
+     *    - According to https://cloud.google.com/storage/docs/locations, the region (or location)
+     *      can only be specified when creating a bucket and not at the GCS client level.
+     */
     return StorageOptions.newBuilder()
                          .setRetrySettings(retrySettings(config))
                          .build()
@@ -77,16 +78,17 @@ public class GcsStorage
   }
 
   public static RetrySettings retrySettings(GcsSinkConnectorConfig config) {
-    return RetrySettings.newBuilder()
-                        .setMaxAttempts(config.getInt(GCS_PART_RETRIES_CONFIG))
-                        .setInitialRetryDelay(Duration.ofMillis(config.getLong(GCS_RETRY_BACKOFF_CONFIG)))
-                        .setMaxRetryDelay(Duration.ofMillis(GCS_RETRY_MAX_BACKOFF_TIME_MS))
-                        .setTotalTimeout(Duration.ofMillis(120000L))
-                        .setRetryDelayMultiplier(1.5)
-                        .setInitialRpcTimeout(Duration.ofMillis(120000L))
-                        .setRpcTimeoutMultiplier(1.5)
-                        .setMaxRpcTimeout(Duration.ofMillis(120000L))
-                        .build();
+    return RetrySettings
+        .newBuilder()
+        .setMaxAttempts(config.getInt(GCS_PART_RETRIES_CONFIG))
+        .setInitialRetryDelay(Duration.ofMillis(config.getLong(GCS_RETRY_BACKOFF_CONFIG)))
+        .setMaxRetryDelay(Duration.ofMillis(GCS_RETRY_MAX_BACKOFF_TIME_MS))
+        .setTotalTimeout(Duration.ofMillis(120000L))
+        .setRetryDelayMultiplier(1.5)
+        .setInitialRpcTimeout(Duration.ofMillis(120000L))
+        .setRpcTimeoutMultiplier(1.5)
+        .setMaxRpcTimeout(Duration.ofMillis(120000L))
+        .build();
   }
 
   // Visible for testing.
